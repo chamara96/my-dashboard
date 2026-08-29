@@ -20,6 +20,8 @@ import { ScrollToTop } from "./components/common/ScrollToTop";
 import Home from "./pages/Dashboard/Home";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
+import SalaryIncomePage from "./pages/Income/SalaryIncomePage";
+import OtherIncomePage from "./pages/Income/OtherIncomePage";
 
 export default function App() {
   return (
@@ -32,6 +34,9 @@ export default function App() {
             <Route element={<ProtectedRoute />}>
               <Route element={<AppLayout />}>
                 <Route index path="/" element={<Home />} />
+
+                <Route path="/income/salary" element={<SalaryIncomePage />} />
+                <Route path="/income/other" element={<OtherIncomePage />} />
 
                 {/* Others Page */}
                 <Route path="/profile" element={<UserProfiles />} />
