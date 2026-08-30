@@ -14,6 +14,7 @@ import {
   PieChartIcon,
   PlugInIcon,
   TableIcon,
+  TaskIcon,
   UserCircleIcon,
 } from "../icons";
 import { useSidebar } from "../context/SidebarContext";
@@ -39,6 +40,11 @@ const navItems: NavItem[] = [
       { name: "Salary Income", path: "/income/salary" },
       { name: "Other Income", path: "/income/other" },
     ],
+  },
+  {
+    icon: <TaskIcon />,
+    name: "Financial Goals",
+    path: "/goals/financial-goals",
   },
   {
     icon: <CalenderIcon />,
