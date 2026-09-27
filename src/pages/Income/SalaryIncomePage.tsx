@@ -18,10 +18,6 @@ import flatpickr from "flatpickr";
 function fmt(n: number) {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
-/** Shows "-" for zero values (field was not entered) */
-function fmtN(n: number) {
-  return n === 0 ? "-" : fmt(n);
-}
 function sym(currency: string) {
   return currency === "EURO" ? "€" : "Rs.";
 }

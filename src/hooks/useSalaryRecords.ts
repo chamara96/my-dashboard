@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { SalaryRecord } from "../types/income";
-import { subscribeToSalaryRecords } from "../services/salaryRecordService";
+import { subscribeToSalaryRecordsPage } from "../services/salaryRecordService";
 
 export function useSalaryRecords(from?: string, to?: string) {
   const [records, setRecords] = useState<SalaryRecord[]>([]);
@@ -10,9 +10,12 @@ export function useSalaryRecords(from?: string, to?: string) {
   useEffect(() => {
     setLoading(true);
     setRecords([]);
-    const unsubscribe = subscribeToSalaryRecords(
-      (items) => { setRecords(items); setLoading(false); },
-      (msg)   => { setError(msg);     setLoading(false); },
+    const unsubscribe = subscribeToSalaryRecordsPage(
+      ({ records: items }) => { setRecords(items); setLoading(false); },
+      (msg)                => { setError(msg);      setLoading(false); },
+      10_000,
+      "first",
+      undefined,
       from,
       to
     );
