@@ -23,6 +23,7 @@ import ProtectedRoute from "./components/auth/ProtectedRoute";
 import SalaryIncomePage from "./pages/Income/SalaryIncomePage";
 import OtherIncomePage from "./pages/Income/OtherIncomePage";
 import FinancialGoalPage from "./pages/Goals/FinancialGoalPage";
+import FamilyMembersPage from "./pages/Settings/FamilyMembersPage";
 
 export default function App() {
   return (
@@ -40,6 +41,8 @@ export default function App() {
                 <Route path="/income/other" element={<OtherIncomePage />} />
 
                 <Route path="/goals/financial-goals" element={<FinancialGoalPage />} />
+
+                <Route path="/settings/family-members" element={<FamilyMembersPage />} />
 
                 {/* Others Page */}
                 <Route path="/profile" element={<UserProfiles />} />

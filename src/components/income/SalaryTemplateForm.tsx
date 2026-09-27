@@ -3,16 +3,16 @@ import { Modal } from "../ui/modal";
 import Button from "../ui/button/Button";
 import {
   Currency,
-  FamilyUser,
+  IncomeType,
   SalaryTemplate,
 } from "../../types/income";
 import {
   addSalaryTemplate,
   updateSalaryTemplate,
 } from "../../services/salaryTemplateService";
+import { useFamilyMembers } from "../../hooks/useFamilyMembers";
 
 const CURRENCIES: Currency[] = ["LKR", "EURO"];
-const USERS: FamilyUser[] = ["User 1", "User 2"];
 
 interface Props {
   isOpen: boolean;
@@ -22,7 +22,8 @@ interface Props {
 
 const EMPTY = (): Omit<SalaryTemplate, "id"> => ({
   name: "",
-  user: "User 1",
+  user: "",
+  type: "local",
   source: "",
   amounts: { basic: 0, fix: 0, variable: 0 },
   currency: "LKR",
@@ -34,6 +35,10 @@ export default function SalaryTemplateForm({ isOpen, onClose, editing }: Props) 
   const [form, setForm] = useState(EMPTY());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const { members } = useFamilyMembers();
+
+  const isForeign = form.type === "foreign";
 
   useEffect(() => {
     if (editing) {
@@ -47,6 +52,18 @@ export default function SalaryTemplateForm({ isOpen, onClose, editing }: Props) 
 
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
+
+  const handleTypeChange = (t: IncomeType) => {
+    setForm((f) => ({
+      ...f,
+      type: t,
+      // Zero out fields that are hidden for foreign income
+      ...(t === "foreign" && {
+        amounts:    { ...f.amounts, fix: 0, variable: 0 },
+        deductions: { etf: 0, epf: 0, tax: 0 },
+      }),
+    }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,6 +98,7 @@ export default function SalaryTemplateForm({ isOpen, onClose, editing }: Props) 
       </h3>
 
       <form onSubmit={handleSubmit} className="space-y-4">
+
         {/* Template name */}
         <div>
           <label className={labelCls}>Template Name *</label>
@@ -88,20 +106,27 @@ export default function SalaryTemplateForm({ isOpen, onClose, editing }: Props) 
             className={inputCls}
             value={form.name}
             onChange={(e) => set("name", e.target.value)}
-            placeholder="e.g. Main Job – User 1"
+            placeholder="e.g. Main Job – Chamara"
           />
         </div>
 
-        {/* User + Source */}
+        {/* User + Currency */}
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={labelCls}>User *</label>
             <select
               className={inputCls}
               value={form.user}
-              onChange={(e) => set("user", e.target.value as FamilyUser)}
+              onChange={(e) => set("user", e.target.value)}
             >
-              {USERS.map((u) => <option key={u}>{u}</option>)}
+              {members.length === 0 && (
+                <option value="">— no members added —</option>
+              )}
+              {members.map((m) => (
+                <option key={m.id} value={m.name}>
+                  {m.label ? `${m.name} (${m.label})` : m.name}
+                </option>
+              ))}
             </select>
           </div>
           <div>
@@ -116,6 +141,30 @@ export default function SalaryTemplateForm({ isOpen, onClose, editing }: Props) 
           </div>
         </div>
 
+        {/* Income Type - radio buttons */}
+        <div>
+          <label className={labelCls}>Income Type *</label>
+          <div className="flex gap-6 mt-1">
+            {(["local", "foreign"] as IncomeType[]).map((t) => (
+              <label
+                key={t}
+                className="flex items-center gap-2 cursor-pointer select-none text-sm text-gray-700 dark:text-gray-300"
+              >
+                <input
+                  type="radio"
+                  name="incomeType"
+                  value={t}
+                  checked={form.type === t}
+                  onChange={() => handleTypeChange(t)}
+                  className="w-4 h-4 accent-brand-500 cursor-pointer"
+                />
+                {t === "local" ? "Local Income" : "Foreign Income"}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* Source */}
         <div>
           <label className={labelCls}>Source (Company) *</label>
           <input
@@ -128,41 +177,63 @@ export default function SalaryTemplateForm({ isOpen, onClose, editing }: Props) 
 
         {/* Amounts */}
         <p className={sectionHdr}>Amounts</p>
-        <div className="grid grid-cols-3 gap-3">
-          {(["basic", "fix", "variable"] as const).map((key) => (
-            <div key={key}>
-              <label className={labelCls}>{key.charAt(0).toUpperCase() + key.slice(1)}</label>
-              <input
-                type="number"
-                min={0}
-                className={inputCls}
-                value={form.amounts[key]}
-                onChange={(e) =>
-                  set("amounts", { ...form.amounts, [key]: Number(e.target.value) })
-                }
-              />
-            </div>
-          ))}
-        </div>
+        {isForeign ? (
+          <div>
+            <label className={labelCls}>Basic</label>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              className={inputCls}
+              value={form.amounts.basic}
+              onChange={(e) =>
+                set("amounts", { ...form.amounts, basic: Number(e.target.value) })
+              }
+            />
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-3">
+            {(["basic", "fix", "variable"] as const).map((key) => (
+              <div key={key}>
+                <label className={labelCls}>{key.charAt(0).toUpperCase() + key.slice(1)}</label>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  className={inputCls}
+                  value={form.amounts[key]}
+                  onChange={(e) =>
+                    set("amounts", { ...form.amounts, [key]: Number(e.target.value) })
+                  }
+                />
+              </div>
+            ))}
+          </div>
+        )}
 
-        {/* Deductions */}
-        <p className={sectionHdr}>Deductions</p>
-        <div className="grid grid-cols-3 gap-3">
-          {(["etf", "epf", "tax"] as const).map((key) => (
-            <div key={key}>
-              <label className={labelCls}>{key.toUpperCase()}</label>
-              <input
-                type="number"
-                min={0}
-                className={inputCls}
-                value={form.deductions[key]}
-                onChange={(e) =>
-                  set("deductions", { ...form.deductions, [key]: Number(e.target.value) })
-                }
-              />
+        {/* Deductions - local only */}
+        {!isForeign && (
+          <>
+            <p className={sectionHdr}>Deductions</p>
+            <div className="grid grid-cols-3 gap-3">
+              {(["etf", "epf", "tax"] as const).map((key) => (
+                <div key={key}>
+                  <label className={labelCls}>{key.toUpperCase()}</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    className={inputCls}
+                    value={form.deductions[key]}
+                    onChange={(e) =>
+                      set("deductions", { ...form.deductions, [key]: Number(e.target.value) })
+                    }
+                  />
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          </>
+        )}
 
         {/* Note */}
         <div>
@@ -178,7 +249,7 @@ export default function SalaryTemplateForm({ isOpen, onClose, editing }: Props) 
         {error && <p className="text-sm text-red-500">{error}</p>}
 
         <div className="flex justify-end gap-3 pt-2">
-          <Button variant="outline" onClick={onClose} >Cancel</Button>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button disabled={saving}>
             {saving ? "Saving…" : editing ? "Update" : "Save Template"}
           </Button>

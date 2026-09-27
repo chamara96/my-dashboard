@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { Modal } from "../ui/modal";
 import Button from "../ui/button/Button";
-import { Currency, FamilyUser, OtherIncome } from "../../types/income";
+import { Currency, OtherIncome } from "../../types/income";
 import { addOtherIncome, updateOtherIncome } from "../../services/otherIncomeService";
+import { useFamilyMembers } from "../../hooks/useFamilyMembers";
 
 const CURRENCIES: Currency[] = ["LKR", "EURO"];
-const USERS: FamilyUser[] = ["User 1", "User 2"];
 
 interface Props {
   isOpen: boolean;
@@ -16,7 +16,7 @@ interface Props {
 const today = () => new Date().toISOString().split("T")[0];
 
 const EMPTY = (): Omit<OtherIncome, "id"> => ({
-  user: "User 1",
+  user: "",
   date: today(),
   amount: 0,
   currency: "LKR",
@@ -27,6 +27,8 @@ export default function OtherIncomeForm({ isOpen, onClose, editing }: Props) {
   const [form, setForm] = useState(EMPTY());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const { members } = useFamilyMembers();
 
   useEffect(() => {
     if (editing) {
@@ -79,9 +81,16 @@ export default function OtherIncomeForm({ isOpen, onClose, editing }: Props) {
             <select
               className={inputCls}
               value={form.user}
-              onChange={(e) => set("user", e.target.value as FamilyUser)}
+              onChange={(e) => set("user", e.target.value)}
             >
-              {USERS.map((u) => <option key={u}>{u}</option>)}
+              {members.length === 0 && (
+                <option value="">— no members added —</option>
+              )}
+              {members.map((m) => (
+                <option key={m.id} value={m.name}>
+                  {m.label ? `${m.name} (${m.label})` : m.name}
+                </option>
+              ))}
             </select>
           </div>
           <div>

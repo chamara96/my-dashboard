@@ -15,7 +15,7 @@ export interface FinancialSnapshot {
 }
 
 /**
- * A recurring monthly item — income or expense that occurs every month
+ * A recurring monthly item - income or expense that occurs every month
  * on the same day (e.g. salary on the 25th, rent on the 1st).
  */
 export interface RecurringEntry {
@@ -25,8 +25,8 @@ export interface RecurringEntry {
   amount: number;
   currency: Currency;
   dayOfMonth: number;  // 1–28
-  startDate: string;   // "YYYY-MM-DD" — when this entry becomes active
-  endDate?: string;    // "YYYY-MM-DD" — optional; entry stops after this date
+  startDate: string;   // "YYYY-MM-DD" - when this entry becomes active
+  endDate?: string;    // "YYYY-MM-DD" - optional; entry stops after this date
   note: string;
 }
 
@@ -42,6 +42,26 @@ export interface OneTimeEntry {
   currency: Currency;
   date: string;        // "YYYY-MM-DD"
   note: string;
+}
+
+// ── Current Holdings ─────────────────────────────────────────────────────────
+
+/**
+ * A single asset / account holding (e.g. "Bank A – LKR", "Bank B – EUR").
+ * Records are **updated in-place** — the user edits the same row over time
+ * rather than adding a new entry each time.
+ * The sum of all holdings converted to LKR is shown as a horizontal reference
+ * line on the projection chart so the user can see their real-world progress.
+ */
+export interface CurrentHolding {
+  id: string;
+  /** Human-readable name, e.g. "Bank A", "Wallet – EUR" */
+  label: string;
+  amount: number;
+  currency: Currency;
+  /** Required when currency !== "LKR". Rate: 1 unit of currency = N LKR */
+  exchangeRate?: number;
+  note?: string;
 }
 
 // ── Projection output types ──────────────────────────────────────────────────

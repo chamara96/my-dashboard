@@ -55,7 +55,7 @@ export default function RecurringEntryForm({ isOpen, onClose, editing }: Props) 
     if (form.amount <= 0)   { setError("Amount must be greater than 0."); return; }
     setSaving(true);
     try {
-      // Firebase RTDB rejects undefined — omit endDate entirely when empty
+      // Firebase RTDB rejects undefined - omit endDate entirely when empty
       const { endDate, ...rest } = form;
       const payload = endDate ? { ...rest, endDate } : rest;
       if (editing) {

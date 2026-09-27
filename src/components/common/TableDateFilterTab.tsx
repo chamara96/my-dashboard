@@ -1,4 +1,8 @@
-export type DateFilterOption = "optionThisMonth" | "optionLastMonth" | "optionThisYear";
+export type DateFilterOption =
+  | "optionThisMonth"
+  | "optionLastMonth"
+  | "optionThisYear"
+  | "optionAll";
 
 interface TableDateFilterTabProps {
   selected: DateFilterOption | null;
@@ -32,6 +36,13 @@ const TableDateFilterTab: React.FC<TableDateFilterTabProps> = ({ selected, onSel
         className={`px-3 py-2 font-medium w-max rounded-md text-theme-sm hover:text-gray-900 dark:hover:text-white ${getButtonClass("optionThisYear")}`}
       >
         This Year
+      </button>
+
+      <button
+        onClick={() => onSelect("optionAll")}
+        className={`px-3 py-2 font-medium w-max rounded-md text-theme-sm hover:text-gray-900 dark:hover:text-white ${getButtonClass("optionAll")}`}
+      >
+        All
       </button>
     </div>
   );

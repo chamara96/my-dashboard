@@ -12,6 +12,13 @@ import { deleteOtherIncome } from "../../services/otherIncomeService";
 function fmt(n: number) {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+/** Shows "-" for zero values (field was not entered) */
+function fmtN(n: number) {
+  return n === 0 ? "-" : fmt(n);
+}
+function sym(currency: string) {
+  return currency === "EURO" ? "€" : "Rs.";
+}
 
 export default function OtherIncomePage() {
   const { isOpen, openModal, closeModal } = useModal();
@@ -63,7 +70,6 @@ export default function OtherIncomePage() {
                       <th className={thCls}>Date</th>
                       <th className={thCls}>User</th>
                       <th className={thCls}>Amount</th>
-                      <th className={thCls}>Currency</th>
                       <th className={thCls}>Note</th>
                       <th className={thCls}>Actions</th>
                     </tr>
@@ -74,9 +80,8 @@ export default function OtherIncomePage() {
                         <td className={`${tdCls} whitespace-nowrap`}>{item.date}</td>
                         <td className={tdCls}>{item.user}</td>
                         <td className={`${tdCls} font-semibold text-green-600 dark:text-green-400`}>
-                          {fmt(item.amount)}
+                          {item.amount === 0 ? "-" : `${sym(item.currency)} ${fmt(item.amount)}`}
                         </td>
-                        <td className={tdCls}>{item.currency}</td>
                         <td className={`${tdCls} max-w-[200px] truncate`} title={item.note}>
                           {item.note}
                         </td>

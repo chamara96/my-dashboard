@@ -16,6 +16,7 @@ import {
   TableIcon,
   TaskIcon,
   UserCircleIcon,
+  GroupIcon,
 } from "../icons";
 import { useSidebar } from "../context/SidebarContext";
 import SidebarWidget from "./SidebarWidget";
@@ -45,6 +46,13 @@ const navItems: NavItem[] = [
     icon: <TaskIcon />,
     name: "Financial Goals",
     path: "/goals/financial-goals",
+  },
+  {
+    icon: <GroupIcon />,
+    name: "Settings",
+    subItems: [
+      { name: "Family Members", path: "/settings/family-members" },
+    ],
   },
   {
     icon: <CalenderIcon />,

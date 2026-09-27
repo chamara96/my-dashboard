@@ -6,7 +6,8 @@ import SalaryTemplateForm from "../../components/income/SalaryTemplateForm";
 import SalaryRecordForm from "../../components/income/SalaryRecordForm";
 import { useModal } from "../../hooks/useModal";
 import { useSalaryTemplates } from "../../hooks/useSalaryTemplates";
-import { useSalaryRecords } from "../../hooks/useSalaryRecords";
+import { useSalaryRecordsPage, PAGE_SIZE } from "../../hooks/useSalaryRecordsPage";
+import { useSalaryRecordsSummary } from "../../hooks/useSalaryRecordsSummary";
 import { SalaryRecord, SalaryTemplate } from "../../types/income";
 import { deleteSalaryTemplate } from "../../services/salaryTemplateService";
 import { deleteSalaryRecord } from "../../services/salaryRecordService";
@@ -17,6 +18,21 @@ import flatpickr from "flatpickr";
 function fmt(n: number) {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+/** Shows "-" for zero values (field was not entered) */
+function fmtN(n: number) {
+  return n === 0 ? "-" : fmt(n);
+}
+function sym(currency: string) {
+  return currency === "EURO" ? "€" : "Rs.";
+}
+function fmtC(n: number, currency: string) {
+  return n === 0 ? "-" : `${sym(currency)} ${fmt(n)}`;
+}
+/** Convert any amount to LKR using stored exchangeRate (1 if already LKR) */
+function toLKR(amount: number, currency: string, exchangeRate?: number): number {
+  if (currency === "LKR") return amount;
+  return amount * (exchangeRate ?? 0);
+}
 
 export default function SalaryIncomePage() {
   const templateModal = useModal();
@@ -24,7 +40,7 @@ export default function SalaryIncomePage() {
 
   const { templates, loading: tLoading, error: tError } = useSalaryTemplates();
 
-  // ── Filter state (computed before the hook so it drives the DB query) ──────
+  // ── Filter state ──────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<DateFilterOption | null>("optionThisMonth");
   const [customRange, setCustomRange] = useState<[string, string] | null>(null);
 
@@ -48,14 +64,26 @@ export default function SalaryIncomePage() {
       const end   = new Date(now.getFullYear(), 11, 31);
       return [toISO(start), toISO(end)];
     }
+    // "All" or custom cleared → no range restriction
     return null;
   }, [activeTab, customRange]);
 
-  // filterRange drives the Firebase query — no client-side filtering needed
-  const { records, loading: rLoading, error: rError } = useSalaryRecords(
+  // ── Summary — own subscription, covers full filter range (never paginated) ─
+  const { summary, loading: sLoading } = useSalaryRecordsSummary(
     filterRange?.[0],
     filterRange?.[1]
   );
+
+  // ── DB-level paginated records — only PAGE_SIZE rows fetched per page ─────
+  const {
+    records: pagedRecords,
+    loading:  rLoading,
+    error:    rError,
+    hasNext,
+    hasPrev,
+    goNext,
+    goPrev,
+  } = useSalaryRecordsPage(filterRange?.[0], filterRange?.[1]);
 
   const [editingTemplate, setEditingTemplate] = useState<SalaryTemplate | null>(null);
   const [editingRecord, setEditingRecord] = useState<SalaryRecord | null>(null);
@@ -176,8 +204,8 @@ export default function SalaryIncomePage() {
                         <tr>
                           <th className={thCls}>Name</th>
                           <th className={thCls}>User</th>
+                          <th className={thCls}>Type</th>
                           <th className={thCls}>Source</th>
-                          <th className={thCls}>Currency</th>
                           <th className={thCls}>Basic</th>
                           <th className={thCls}>Fix</th>
                           <th className={thCls}>Variable</th>
@@ -192,14 +220,18 @@ export default function SalaryIncomePage() {
                           <tr key={t.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.02]">
                             <td className={`${tdCls} font-medium text-gray-900 dark:text-white`}>{t.name}</td>
                             <td className={tdCls}>{t.user}</td>
+                            <td className={tdCls}>
+                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${t.type === "foreign" ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400" : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"}`}>
+                                {t.type === "foreign" ? "Foreign" : "Local"}
+                              </span>
+                            </td>
                             <td className={tdCls}>{t.source}</td>
-                            <td className={tdCls}>{t.currency}</td>
-                            <td className={tdCls}>{fmt(t.amounts.basic)}</td>
-                            <td className={tdCls}>{fmt(t.amounts.fix)}</td>
-                            <td className={tdCls}>{fmt(t.amounts.variable)}</td>
-                            <td className={tdCls}>{fmt(t.deductions.etf)}</td>
-                            <td className={tdCls}>{fmt(t.deductions.epf)}</td>
-                            <td className={tdCls}>{fmt(t.deductions.tax)}</td>
+                            <td className={tdCls}>{fmtC(t.amounts.basic, t.currency)}</td>
+                            <td className={tdCls}>{fmtC(t.amounts.fix, t.currency)}</td>
+                            <td className={tdCls}>{fmtC(t.amounts.variable, t.currency)}</td>
+                            <td className={tdCls}>{fmtC(t.deductions.etf, t.currency)}</td>
+                            <td className={tdCls}>{fmtC(t.deductions.epf, t.currency)}</td>
+                            <td className={tdCls}>{fmtC(t.deductions.tax, t.currency)}</td>
                             <td className={`${tdCls} whitespace-nowrap`}>
                               <button
                                 onClick={() => openLogFromTemplate(t)}
@@ -232,6 +264,38 @@ export default function SalaryIncomePage() {
           </div>
         </div>
 
+        {/* ── Summary KPIs (LKR, same filter as records) ───────────── */}
+        {(sLoading || summary.recordCount > 0) && (
+          <div className="col-span-12 grid grid-cols-2 gap-4 sm:grid-cols-5">
+            {[
+              { label: "Total Earned",  value: summary.totalEarned, color: "text-gray-900 dark:text-white" },
+              { label: "Total ETF",     value: summary.totalETF,    color: "text-gray-600 dark:text-gray-300" },
+              { label: "Total EPF",     value: summary.totalEPF,    color: "text-gray-600 dark:text-gray-300" },
+              { label: "Total Tax",     value: summary.totalTax,    color: "text-red-500 dark:text-red-400" },
+              { label: "Take Home",     value: summary.takeHome,    color: "text-green-600 dark:text-green-400" },
+            ].map((card) => (
+              <div
+                key={card.label}
+                className="rounded-2xl border border-gray-200 bg-white px-5 py-4 dark:border-gray-800 dark:bg-white/[0.03]"
+              >
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-1">
+                  {card.label}
+                </p>
+                {sLoading ? (
+                  <div className="h-6 w-28 rounded bg-gray-100 dark:bg-gray-700 animate-pulse mt-1" />
+                ) : (
+                  <p className={`text-lg font-bold truncate ${card.color}`}>
+                    Rs.&nbsp;{fmt(card.value)}
+                  </p>
+                )}
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+                  in LKR{sLoading ? "" : ` · ${summary.recordCount} record${summary.recordCount !== 1 ? "s" : ""}`}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* ── Records ──────────────────────────────────────────────── */}
         <div className="col-span-12">
           <div className="rounded-2xl border border-gray-200 bg-white px-5 pb-5 pt-5 dark:border-gray-800 dark:bg-white/[0.03] sm:px-6 sm:pt-6">
@@ -242,7 +306,7 @@ export default function SalaryIncomePage() {
                 Salary Records
                 </h3>
                 <p className="mt-1 text-gray-500 text-theme-sm dark:text-gray-400">
-                  Target you've set for each month
+                  Log of actual salary received each month
                 </p>
               </div>
               <div className="flex items-center gap-3 sm:justify-end">
@@ -267,7 +331,7 @@ export default function SalaryIncomePage() {
 
                   {rLoading ? (
                     <p className="text-sm text-gray-500 dark:text-gray-400 py-4">Loading…</p>
-                  ) : records.length === 0 ? (
+                  ) : pagedRecords.length === 0 ? (
                     <p className="text-sm text-gray-400 dark:text-gray-500 py-4 text-center">
                       No records for the selected period.
                     </p>
@@ -278,8 +342,8 @@ export default function SalaryIncomePage() {
                         <tr>
                           <th className={thCls}>Date</th>
                           <th className={thCls}>User</th>
+                          <th className={thCls}>Type</th>
                           <th className={thCls}>Source</th>
-                          <th className={thCls}>Currency</th>
                           <th className={thCls}>Basic</th>
                           <th className={thCls}>Fix</th>
                           <th className={thCls}>Variable</th>
@@ -288,29 +352,43 @@ export default function SalaryIncomePage() {
                           <th className={thCls}>EPF</th>
                           <th className={thCls}>Tax</th>
                           <th className={thCls}>Net</th>
+                          <th className={thCls}>Net (LKR)</th>
                           <th className={thCls}>Note</th>
                           <th className={thCls}>Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
-                        {records.map((r) => {
+                        {pagedRecords.map((r) => {
                           const gross = r.amounts.basic + r.amounts.fix + r.amounts.variable;
                           const totalDed = r.deductions.etf + r.deductions.epf + r.deductions.tax;
                           const net = gross - totalDed;
+                          const netLKR = toLKR(net, r.currency, r.exchangeRate);
                           return (
                             <tr key={r.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.02]">
                               <td className={`${tdCls} whitespace-nowrap`}>{r.date}</td>
                               <td className={tdCls}>{r.user}</td>
+                              <td className={tdCls}>
+                                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${r.type === "foreign" ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400" : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"}`}>
+                                  {r.type === "foreign" ? "Foreign" : "Local"}
+                                </span>
+                              </td>
                               <td className={tdCls}>{r.source}</td>
-                              <td className={tdCls}>{r.currency}</td>
-                              <td className={tdCls}>{fmt(r.amounts.basic)}</td>
-                              <td className={tdCls}>{fmt(r.amounts.fix)}</td>
-                              <td className={tdCls}>{fmt(r.amounts.variable)}</td>
-                              <td className={`${tdCls} font-medium`}>{fmt(gross)}</td>
-                              <td className={tdCls}>{fmt(r.deductions.etf)}</td>
-                              <td className={tdCls}>{fmt(r.deductions.epf)}</td>
-                              <td className={tdCls}>{fmt(r.deductions.tax)}</td>
-                              <td className={`${tdCls} font-semibold text-green-600 dark:text-green-400`}>{fmt(net)}</td>
+                              <td className={tdCls}>{fmtC(r.amounts.basic, r.currency)}</td>
+                              <td className={tdCls}>{fmtC(r.amounts.fix, r.currency)}</td>
+                              <td className={tdCls}>{fmtC(r.amounts.variable, r.currency)}</td>
+                              <td className={`${tdCls} font-medium`}>{`${sym(r.currency)} ${fmt(gross)}`}</td>
+                              <td className={tdCls}>{fmtC(r.deductions.etf, r.currency)}</td>
+                              <td className={tdCls}>{fmtC(r.deductions.epf, r.currency)}</td>
+                              <td className={tdCls}>{fmtC(r.deductions.tax, r.currency)}</td>
+                              <td className={`${tdCls} font-semibold text-green-600 dark:text-green-400`}>{`${sym(r.currency)} ${fmt(net)}`}</td>
+                              <td className={`${tdCls} font-semibold ${r.currency === "LKR" ? "text-gray-400 dark:text-gray-500 text-xs" : "text-brand-600 dark:text-brand-400"}`}>
+                                {r.currency === "LKR"
+                                  ? "—"
+                                  : r.exchangeRate
+                                  ? `Rs. ${fmt(netLKR)}`
+                                  : <span className="text-xs text-gray-400">no rate</span>
+                                }
+                              </td>
                               <td className={`${tdCls} max-w-[140px] truncate`} title={r.note}>{r.note}</td>
                               <td className={`${tdCls} whitespace-nowrap`}>
                                 <button
@@ -336,10 +414,35 @@ export default function SalaryIncomePage() {
                 
               </div>
             </div>
+
+            {/* ── Pagination ───────────────────────────────────────── */}
+            {!rLoading && (hasPrev || hasNext) && (
+              <div className="mt-4 flex items-center justify-between border-t border-gray-100 dark:border-white/[0.05] pt-4">
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Showing {PAGE_SIZE} records per page · fetched from DB
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={goPrev}
+                    disabled={!hasPrev}
+                    className="px-3 py-1 text-xs rounded-md border border-gray-200 dark:border-gray-700 text-gray-500 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:cursor-not-allowed"
+                  >
+                    ‹ Newer
+                  </button>
+                  <button
+                    onClick={goNext}
+                    disabled={!hasNext}
+                    className="px-3 py-1 text-xs rounded-md border border-gray-200 dark:border-gray-700 text-gray-500 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:cursor-not-allowed"
+                  >
+                    Older ›
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
-      </div>
+      </div>{/* end grid */}
 
       {/* ── Modals ───────────────────────────────────────────────── */}
       <SalaryTemplateForm

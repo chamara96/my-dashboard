@@ -1,4 +1,9 @@
-import { onValue, push, ref, remove, set } from "firebase/database";
+import { onValue, orderByChild, push, query, ref, remove, set } from "firebase/database";
+
+// Firebase RTDB indexes required in security rules:
+//   "financialSnapshots": { ".indexOn": ["date"] }
+//   "oneTimeEntries":     { ".indexOn": ["date"] }
+//   "recurringEntries":   { ".indexOn": ["dayOfMonth"] }
 import { db } from "../lib/firebase";
 import {
   FinancialSnapshot,
@@ -14,15 +19,17 @@ export function subscribeToSnapshots(
   onData: (items: FinancialSnapshot[]) => void,
   onError: (message: string) => void
 ): () => void {
+  // Firebase returns ascending; reverse gives date descending
+  const q = query(ref(db, SNAPSHOTS_PATH), orderByChild("date"));
   return onValue(
-    ref(db, SNAPSHOTS_PATH),
+    q,
     (snapshot) => {
       const data = snapshot.val();
       if (data) {
         const list: FinancialSnapshot[] = Object.entries(data).map(
           ([id, value]) => ({ id, ...(value as Omit<FinancialSnapshot, "id">) })
         );
-        list.sort((a, b) => (a.date < b.date ? 1 : -1));
+        list.reverse();
         onData(list);
       } else {
         onData([]);
@@ -57,18 +64,16 @@ export function subscribeToRecurringEntries(
   onData: (items: RecurringEntry[]) => void,
   onError: (message: string) => void
 ): () => void {
+  // orderByChild("dayOfMonth") → ascending day order (1 → 28)
+  const q = query(ref(db, RECURRING_PATH), orderByChild("dayOfMonth"));
   return onValue(
-    ref(db, RECURRING_PATH),
+    q,
     (snapshot) => {
       const data = snapshot.val();
       if (data) {
         const list: RecurringEntry[] = Object.entries(data).map(
           ([id, value]) => ({ id, ...(value as Omit<RecurringEntry, "id">) })
         );
-        list.sort((a, b) => {
-          if (a.type !== b.type) return a.type === "income" ? -1 : 1;
-          return a.label.localeCompare(b.label);
-        });
         onData(list);
       } else {
         onData([]);
@@ -103,15 +108,18 @@ export function subscribeToOneTimeEntries(
   onData: (items: OneTimeEntry[]) => void,
   onError: (message: string) => void
 ): () => void {
+  // orderByChild("date") → ascending date order (oldest first)
+  const q = query(ref(db, ONE_TIME_PATH), orderByChild("amount"));
   return onValue(
-    ref(db, ONE_TIME_PATH),
+    q,
     (snapshot) => {
       const data = snapshot.val();
       if (data) {
         const list: OneTimeEntry[] = Object.entries(data).map(
           ([id, value]) => ({ id, ...(value as Omit<OneTimeEntry, "id">) })
         );
-        list.sort((a, b) => (a.date < b.date ? 1 : -1));
+        console.log(list);
+        
         onData(list);
       } else {
         onData([]);

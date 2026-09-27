@@ -112,7 +112,7 @@ export function computeProjection(
 }
 
 /**
- * Given a set of snapshots, returns the one most likely to be "today's balance" —
+ * Given a set of snapshots, returns the one most likely to be "today's balance" -
  * the most recent one on or before today.
  */
 export function getLatestSnapshot(

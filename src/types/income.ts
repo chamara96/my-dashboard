@@ -1,6 +1,9 @@
 export type Currency = "LKR" | "EURO";
 
-export type FamilyUser = "User 1" | "User 2";
+/** Resolved dynamically from the familyMembers DB collection. */
+export type FamilyUser = string;
+
+export type IncomeType = "local" | "foreign";
 
 // ─── Salary ─────────────────────────────────────────────────────────────────
 
@@ -22,6 +25,7 @@ export interface SalaryTemplate {
   id: string;
   name: string;
   user: FamilyUser;
+  type: IncomeType;
   source: string;
   amounts: SalaryAmounts;
   currency: Currency;
@@ -34,10 +38,13 @@ export interface SalaryRecord {
   id: string;
   templateId?: string;
   user: FamilyUser;
+  type: IncomeType;
   date: string;       // ISO date string, e.g. "2026-08-01"
   source: string;
   amounts: SalaryAmounts;
   currency: Currency;
+  /** Exchange rate to LKR — required when type === "foreign" */
+  exchangeRate?: number;
   deductions: SalaryDeductions;
   note: string;
 }

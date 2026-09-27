@@ -4,6 +4,8 @@ import { MonthlyProjection } from "../../types/goals";
 
 interface Props {
   data: MonthlyProjection[];
+  /** Sum of all current holdings in LKR — drawn as a horizontal reference line */
+  currentTotalLKR?: number;
 }
 
 function fmt(n: number) {
@@ -14,7 +16,7 @@ function fmt(n: number) {
   return n.toFixed(0);
 }
 
-export default function ProjectionChart({ data }: Props) {
+export default function ProjectionChart({ data, currentTotalLKR }: Props) {
   const categories = data.map((d) => d.label);
 
   const balanceSeries = data.map((d) => Math.round(d.closingBalance));
@@ -106,30 +108,50 @@ export default function ProjectionChart({ data }: Props) {
         style: { fontSize: "12px", colors: ["#6B7280"] },
       },
     },
-    // Vertical reference line at the transition from past → projected
-    annotations:
-      splitIdx > 0
-        ? {
-            xaxis: [
-              {
-                x: data[splitIdx].label,
-                borderColor: "#D1D5DB",
-                borderWidth: 1,
-                strokeDashArray: 4,
-                label: {
-                  text: "Today →",
-                  style: {
-                    color: "#6B7280",
-                    fontSize: "11px",
-                    background: "transparent",
-                  },
-                  orientation: "horizontal",
-                  position: "top",
-                },
+    // Reference lines: vertical Today divider + horizontal Current Holdings
+    annotations: {
+      ...(splitIdx > 0 && {
+        xaxis: [
+          {
+            x: data[splitIdx].label,
+            borderColor: "#D1D5DB",
+            borderWidth: 1,
+            strokeDashArray: 4,
+            label: {
+              text: "Today →",
+              style: {
+                color: "#6B7280",
+                fontSize: "11px",
+                background: "transparent",
               },
-            ],
-          }
-        : {},
+              orientation: "horizontal",
+              position: "top",
+            },
+          },
+        ],
+      }),
+      ...(currentTotalLKR !== undefined && currentTotalLKR > 0 && {
+        yaxis: [
+          {
+            y: Math.round(currentTotalLKR),
+            borderColor: "#F59E0B",
+            borderWidth: 2,
+            strokeDashArray: 5,
+            label: {
+              text: `Now: Rs. ${fmt(currentTotalLKR)}`,
+              position: "center",
+              style: {
+                color: "#92400E",
+                background: "#FEF3C7",
+                fontSize: "11px",
+                fontWeight: 600,
+                padding: { left: 6, right: 6, top: 3, bottom: 3 },
+              },
+            },
+          },
+        ],
+      }),
+    },
   };
 
   const series = [
