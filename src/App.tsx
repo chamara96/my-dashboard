@@ -24,6 +24,7 @@ import SalaryIncomePage from "./pages/Income/SalaryIncomePage";
 import OtherIncomePage from "./pages/Income/OtherIncomePage";
 import FinancialGoalPage from "./pages/Goals/FinancialGoalPage";
 import FamilyMembersPage from "./pages/Settings/FamilyMembersPage";
+import BudgetPage from "./pages/Budget/BudgetPage";
 
 export default function App() {
   return (
@@ -41,6 +42,8 @@ export default function App() {
                 <Route path="/income/other" element={<OtherIncomePage />} />
 
                 <Route path="/goals/financial-goals" element={<FinancialGoalPage />} />
+
+                <Route path="/budget" element={<BudgetPage />} />
 
                 <Route path="/settings/family-members" element={<FamilyMembersPage />} />
 

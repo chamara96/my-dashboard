@@ -17,6 +17,7 @@ import {
   TaskIcon,
   UserCircleIcon,
   GroupIcon,
+  DollarLineIcon,
 } from "../icons";
 import { useSidebar } from "../context/SidebarContext";
 import SidebarWidget from "./SidebarWidget";
@@ -46,6 +47,11 @@ const navItems: NavItem[] = [
     icon: <TaskIcon />,
     name: "Financial Goals",
     path: "/goals/financial-goals",
+  },
+  {
+    icon: <DollarLineIcon />,
+    name: "Budget",
+    path: "/budget",
   },
   {
     icon: <GroupIcon />,
