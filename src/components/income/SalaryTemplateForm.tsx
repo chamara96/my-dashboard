@@ -11,6 +11,7 @@ import {
   updateSalaryTemplate,
 } from "../../services/salaryTemplateService";
 import { useFamilyMembers } from "../../hooks/useFamilyMembers";
+import LocalSalaryPayFields from "./LocalSalaryPayFields";
 
 const CURRENCIES: Currency[] = ["LKR", "EURO"];
 
@@ -27,7 +28,8 @@ const EMPTY = (): Omit<SalaryTemplate, "id"> => ({
   source: "",
   amounts: { basic: 0, fix: 0, variable: 0 },
   currency: "LKR",
-  deductions: { etf: 0, epf: 0, tax: 0 },
+  deductions: { epfEmployee: 0, tax: 0 },
+  contributions: { etf: 0, epfEmployer: 0 },
   note: "",
 });
 
@@ -60,7 +62,8 @@ export default function SalaryTemplateForm({ isOpen, onClose, editing }: Props) 
       // Zero out fields that are hidden for foreign income
       ...(t === "foreign" && {
         amounts:    { ...f.amounts, fix: 0, variable: 0 },
-        deductions: { etf: 0, epf: 0, tax: 0 },
+        deductions: { epfEmployee: 0, tax: 0 },
+        contributions: { etf: 0, epfEmployer: 0 },
       }),
     }));
   };
@@ -211,28 +214,15 @@ export default function SalaryTemplateForm({ isOpen, onClose, editing }: Props) 
           </div>
         )}
 
-        {/* Deductions - local only */}
         {!isForeign && (
-          <>
-            <p className={sectionHdr}>Deductions</p>
-            <div className="grid grid-cols-3 gap-3">
-              {(["etf", "epf", "tax"] as const).map((key) => (
-                <div key={key}>
-                  <label className={labelCls}>{key.toUpperCase()}</label>
-                  <input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    className={inputCls}
-                    value={form.deductions[key]}
-                    onChange={(e) =>
-                      set("deductions", { ...form.deductions, [key]: Number(e.target.value) })
-                    }
-                  />
-                </div>
-              ))}
-            </div>
-          </>
+          <LocalSalaryPayFields
+            amounts={form.amounts}
+            deductions={form.deductions}
+            contributions={form.contributions}
+            currency={form.currency}
+            onDeductions={(deductions) => set("deductions", deductions)}
+            onContributions={(contributions) => set("contributions", contributions)}
+          />
         )}
 
         {/* Note */}

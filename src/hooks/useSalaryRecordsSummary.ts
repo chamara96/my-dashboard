@@ -6,10 +6,12 @@ import {
 
 const EMPTY: SalaryRecordSummary = {
   totalEarned: 0,
-  totalETF:    0,
-  totalEPF:    0,
-  totalTax:    0,
-  takeHome:    0,
+  totalETF: 0,
+  totalEPFEmployee: 0,
+  totalEPFEmployer: 0,
+  totalEPF: 0,
+  totalTax: 0,
+  takeHome: 0,
   recordCount: 0,
 };
 

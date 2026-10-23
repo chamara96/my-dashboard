@@ -8,6 +8,7 @@ import {
 } from "firebase/database";
 import { db } from "../lib/firebase";
 import { SalaryTemplate } from "../types/income";
+import { normalizeSalaryPay } from "../utils/salaryPay";
 
 const PATH = "salaryTemplates";
 
@@ -22,7 +23,8 @@ export function subscribeToSalaryTemplates(
       const data = snapshot.val();
       if (data) {
         const list: SalaryTemplate[] = Object.entries(data).map(
-          ([id, value]) => ({ id, ...(value as Omit<SalaryTemplate, "id">) })
+          ([id, value]) =>
+            normalizeSalaryPay({ id, ...(value as Omit<SalaryTemplate, "id">) })
         );
         onData(list);
       } else {

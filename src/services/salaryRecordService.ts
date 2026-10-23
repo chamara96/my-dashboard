@@ -15,14 +15,21 @@ import {
 } from "firebase/database";
 import { db } from "../lib/firebase";
 import { SalaryRecord } from "../types/income";
+import { grossOf, normalizeSalaryPay } from "../utils/salaryPay";
 
 const PATH = "salaryRecords";
 
+/** Newest salary date first. Push id only breaks ties on the same date. */
+function bySalaryDateDesc(a: SalaryRecord, b: SalaryRecord): number {
+  const byDate = (b.date ?? "").localeCompare(a.date ?? "");
+  if (byDate !== 0) return byDate;
+  return b.id.localeCompare(a.id);
+}
+
 // ── Cursor type for DB-level pagination ───────────────────────────────────────
-// Firebase RTDB orderByChild returns ascending; we display descending (newest
-// first) by reversing the result. So "next page" means older records
-// (endBefore the oldest record seen), and "prev page" means newer records
-// (startAfter the newest record seen).
+// Pages are shown newest salary date first. "Next" moves to older records
+// (endBefore the oldest row on the page). "Prev" moves to newer records
+// (startAfter the newest row on the page).
 
 export interface SalaryRecordCursor {
   /** ISO date of the boundary record */
@@ -90,18 +97,19 @@ export function subscribeToSalaryRecordsPage(
         return;
       }
 
-      // Firebase returns ascending by date; reverse for newest-first display
-      const list: SalaryRecord[] = Object.entries(data).map(
-        ([id, value]) => ({ id, ...(value as Omit<SalaryRecord, "id">) })
-      );
-
-      if (direction === "prev") {
-        // limitToFirst gives oldest-first; we already want newest-first so reverse
-        list.reverse();
-      } else {
-        // limitToLast gives oldest-to-newest within the window; reverse for display
-        list.reverse();
-      }
+      // snapshot.val() is a plain object keyed by the push id, so Object.entries
+      // follows creation order and drops the orderByChild("date") order.
+      // forEach walks the query order (date ascending). Sort again so the page
+      // is newest salary date first, with the push id only as a same-day tiebreak.
+      const list: SalaryRecord[] = [];
+      snapshot.forEach((child) => {
+        const id = child.key;
+        if (!id) return;
+        list.push(
+          normalizeSalaryPay({ id, ...(child.val() as Omit<SalaryRecord, "id">) })
+        );
+      });
+      list.sort(bySalaryDateDesc);
 
       const startCursor = list.length > 0
         ? { date: list[0].date, key: list[0].id }
@@ -120,7 +128,13 @@ export function subscribeToSalaryRecordsPage(
 
 export interface SalaryRecordSummary {
   totalEarned: number;
+  /** Company ETF contributions for the period. */
   totalETF: number;
+  /** Employee EPF (8%) deducted from salary. */
+  totalEPFEmployee: number;
+  /** Employer EPF (12%). Not deducted from salary. */
+  totalEPFEmployer: number;
+  /** Employee + employer EPF — the amount added to the EPF fund. */
   totalEPF: number;
   totalTax: number;
   takeHome: number;
@@ -144,31 +158,44 @@ export function subscribeToSalaryRecordsSummary(
     (snapshot) => {
       const data = snapshot.val();
       if (!data) {
-        onData({ totalEarned: 0, totalETF: 0, totalEPF: 0, totalTax: 0, takeHome: 0, recordCount: 0 });
+        onData({
+          totalEarned: 0,
+          totalETF: 0,
+          totalEPFEmployee: 0,
+          totalEPFEmployer: 0,
+          totalEPF: 0,
+          totalTax: 0,
+          takeHome: 0,
+          recordCount: 0,
+        });
         return;
       }
       let totalEarned = 0;
-      let totalETF    = 0;
-      let totalEPF    = 0;
-      let totalTax    = 0;
+      let totalETF = 0;
+      let totalEPFEmployee = 0;
+      let totalEPFEmployer = 0;
+      let totalTax = 0;
       let recordCount = 0;
 
       for (const value of Object.values(data)) {
-        const r = value as Omit<SalaryRecord, "id">;
+        const r = normalizeSalaryPay(value as Omit<SalaryRecord, "id">);
         const rate = r.currency === "LKR" ? 1 : (r.exchangeRate ?? 0);
-        totalEarned += (r.amounts.basic + r.amounts.fix + r.amounts.variable) * rate;
-        totalETF    += r.deductions.etf  * rate;
-        totalEPF    += r.deductions.epf  * rate;
-        totalTax    += r.deductions.tax  * rate;
+        totalEarned += grossOf(r.amounts) * rate;
+        totalETF += r.contributions.etf * rate;
+        totalEPFEmployee += r.deductions.epfEmployee * rate;
+        totalEPFEmployer += r.contributions.epfEmployer * rate;
+        totalTax += r.deductions.tax * rate;
         recordCount++;
       }
 
       onData({
         totalEarned,
         totalETF,
-        totalEPF,
+        totalEPFEmployee,
+        totalEPFEmployer,
+        totalEPF: totalEPFEmployee + totalEPFEmployer,
         totalTax,
-        takeHome: totalEarned - totalEPF - totalTax,
+        takeHome: totalEarned - totalEPFEmployee - totalTax,
         recordCount,
       });
     },

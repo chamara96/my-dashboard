@@ -9,6 +9,7 @@ import { useSalaryTemplates } from "../../hooks/useSalaryTemplates";
 import { useSalaryRecordsPage, PAGE_SIZE } from "../../hooks/useSalaryRecordsPage";
 import { useSalaryRecordsSummary } from "../../hooks/useSalaryRecordsSummary";
 import { SalaryRecord, SalaryTemplate } from "../../types/income";
+import { grossOf, takeHomeOf } from "../../utils/salaryPay";
 import { deleteSalaryTemplate } from "../../services/salaryTemplateService";
 import { deleteSalaryRecord } from "../../services/salaryRecordService";
 import TableDateFilterTab, { DateFilterOption } from "../../components/common/TableDateFilterTab";
@@ -205,8 +206,9 @@ export default function SalaryIncomePage() {
                           <th className={thCls}>Basic</th>
                           <th className={thCls}>Fix</th>
                           <th className={thCls}>Variable</th>
-                          <th className={thCls}>ETF</th>
-                          <th className={thCls}>EPF</th>
+                          <th className={thCls} title="Company contribution, not deducted from salary">ETF</th>
+                          <th className={thCls} title="Your 8% contribution, deducted from salary">EPF 8%</th>
+                          <th className={thCls} title="Company 12% contribution, not deducted from salary">EPF 12%</th>
                           <th className={thCls}>Tax</th>
                           <th className={thCls}>Actions</th>
                         </tr>
@@ -225,8 +227,9 @@ export default function SalaryIncomePage() {
                             <td className={tdCls}>{fmtC(t.amounts.basic, t.currency)}</td>
                             <td className={tdCls}>{fmtC(t.amounts.fix, t.currency)}</td>
                             <td className={tdCls}>{fmtC(t.amounts.variable, t.currency)}</td>
-                            <td className={tdCls}>{fmtC(t.deductions.etf, t.currency)}</td>
-                            <td className={tdCls}>{fmtC(t.deductions.epf, t.currency)}</td>
+                            <td className={tdCls}>{fmtC(t.contributions.etf, t.currency)}</td>
+                            <td className={tdCls}>{fmtC(t.deductions.epfEmployee, t.currency)}</td>
+                            <td className={tdCls}>{fmtC(t.contributions.epfEmployer, t.currency)}</td>
                             <td className={tdCls}>{fmtC(t.deductions.tax, t.currency)}</td>
                             <td className={`${tdCls} whitespace-nowrap`}>
                               <button
@@ -262,33 +265,45 @@ export default function SalaryIncomePage() {
 
         {/* ── Summary KPIs (LKR, same filter as records) ───────────── */}
         {(sLoading || summary.recordCount > 0) && (
-          <div className="col-span-12 grid grid-cols-2 gap-4 sm:grid-cols-5">
-            {[
-              { label: "Total Earned",  value: summary.totalEarned, color: "text-gray-900 dark:text-white" },
-              { label: "Total ETF",     value: summary.totalETF,    color: "text-gray-600 dark:text-gray-300" },
-              { label: "Total EPF",     value: summary.totalEPF,    color: "text-gray-600 dark:text-gray-300" },
-              { label: "Total Tax",     value: summary.totalTax,    color: "text-red-500 dark:text-red-400" },
-              { label: "Take Home",     value: summary.takeHome,    color: "text-green-600 dark:text-green-400" },
-            ].map((card) => (
-              <div
-                key={card.label}
-                className="rounded-2xl border border-gray-200 bg-white px-5 py-4 dark:border-gray-800 dark:bg-white/[0.03]"
-              >
-                <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-1">
-                  {card.label}
-                </p>
-                {sLoading ? (
-                  <div className="h-6 w-28 rounded bg-gray-100 dark:bg-gray-700 animate-pulse mt-1" />
-                ) : (
-                  <p className={`text-lg font-bold truncate ${card.color}`}>
-                    Rs.&nbsp;{fmt(card.value)}
+          <div className="col-span-12">
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
+              Summary
+            </h3>
+            <p className="mt-1 mb-4 text-gray-500 text-theme-sm dark:text-gray-400">
+              Amounts in LKR
+              {sLoading ? "" : ` · ${summary.recordCount} record${summary.recordCount !== 1 ? "s" : ""}`}
+              . ETF and company EPF are employer contributions. Take-home deducts only your EPF (8%) and tax.
+            </p>
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4">
+              {[
+                { label: "Total Earned", value: summary.totalEarned, hint: "Gross salary", color: "text-gray-900 dark:text-white" },
+                { label: "Take Home", value: summary.takeHome, hint: "After EPF 8% and tax", color: "text-green-600 dark:text-green-400" },
+                { label: "Tax", value: summary.totalTax, hint: "Deducted from salary", color: "text-red-500 dark:text-red-400" },
+                { label: "ETF", value: summary.totalETF, hint: "Company contribution", color: "text-gray-800 dark:text-white" },
+                { label: "EPF (you 8%)", value: summary.totalEPFEmployee, hint: "Deducted from salary", color: "text-gray-800 dark:text-white" },
+                { label: "EPF (company 12%)", value: summary.totalEPFEmployer, hint: "Company contribution", color: "text-gray-800 dark:text-white" },
+                { label: "EPF total", value: summary.totalEPF, hint: "You + company, in the fund", color: "text-brand-600 dark:text-brand-400" },
+              ].map((card) => (
+                <div
+                  key={card.label}
+                  className="rounded-2xl border border-gray-200 bg-white px-5 py-4 dark:border-gray-800 dark:bg-white/[0.03]"
+                >
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-1">
+                    {card.label}
                   </p>
-                )}
-                <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-                  in LKR{sLoading ? "" : ` · ${summary.recordCount} record${summary.recordCount !== 1 ? "s" : ""}`}
-                </p>
-              </div>
-            ))}
+                  {sLoading ? (
+                    <div className="h-6 w-28 rounded bg-gray-100 dark:bg-gray-700 animate-pulse mt-1" />
+                  ) : (
+                    <p className={`text-lg font-bold truncate ${card.color}`}>
+                      Rs.&nbsp;{fmt(card.value)}
+                    </p>
+                  )}
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+                    {card.hint}
+                  </p>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -344,8 +359,9 @@ export default function SalaryIncomePage() {
                           <th className={thCls}>Fix</th>
                           <th className={thCls}>Variable</th>
                           <th className={thCls}>Gross</th>
-                          <th className={thCls}>ETF</th>
-                          <th className={thCls}>EPF</th>
+                          <th className={thCls} title="Company contribution, not deducted from salary">ETF</th>
+                          <th className={thCls} title="Your 8% contribution, deducted from salary">EPF 8%</th>
+                          <th className={thCls} title="Company 12% contribution, not deducted from salary">EPF 12%</th>
                           <th className={thCls}>Tax</th>
                           <th className={thCls}>Net</th>
                           <th className={thCls}>Net (LKR)</th>
@@ -355,9 +371,8 @@ export default function SalaryIncomePage() {
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
                         {pagedRecords.map((r) => {
-                          const gross = r.amounts.basic + r.amounts.fix + r.amounts.variable;
-                          const totalDed = r.deductions.etf + r.deductions.epf + r.deductions.tax;
-                          const net = gross - totalDed;
+                          const gross = grossOf(r.amounts);
+                          const net = takeHomeOf(r.amounts, r.deductions);
                           const netLKR = toLKR(net, r.currency, r.exchangeRate);
                           return (
                             <tr key={r.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.02]">
@@ -373,8 +388,9 @@ export default function SalaryIncomePage() {
                               <td className={tdCls}>{fmtC(r.amounts.fix, r.currency)}</td>
                               <td className={tdCls}>{fmtC(r.amounts.variable, r.currency)}</td>
                               <td className={`${tdCls} font-medium`}>{`${sym(r.currency)} ${fmt(gross)}`}</td>
-                              <td className={tdCls}>{fmtC(r.deductions.etf, r.currency)}</td>
-                              <td className={tdCls}>{fmtC(r.deductions.epf, r.currency)}</td>
+                              <td className={tdCls}>{fmtC(r.contributions.etf, r.currency)}</td>
+                              <td className={tdCls}>{fmtC(r.deductions.epfEmployee, r.currency)}</td>
+                              <td className={tdCls}>{fmtC(r.contributions.epfEmployer, r.currency)}</td>
                               <td className={tdCls}>{fmtC(r.deductions.tax, r.currency)}</td>
                               <td className={`${tdCls} font-semibold text-green-600 dark:text-green-400`}>{`${sym(r.currency)} ${fmt(net)}`}</td>
                               <td className={`${tdCls} font-semibold ${r.currency === "LKR" ? "text-gray-400 dark:text-gray-500 text-xs" : "text-brand-600 dark:text-brand-400"}`}>

@@ -13,10 +13,19 @@ export interface SalaryAmounts {
   variable: number;
 }
 
+/** Amounts taken out of salary before take-home. */
 export interface SalaryDeductions {
-  etf: number;
-  epf: number;
+  /** Employee EPF contribution (8% of basic). */
+  epfEmployee: number;
   tax: number;
+}
+
+/** Paid by the employer. These do not reduce take-home. */
+export interface SalaryContributions {
+  /** Employer ETF contribution (typically 3% of basic). */
+  etf: number;
+  /** Employer EPF contribution (12% of basic). */
+  epfEmployer: number;
 }
 
 /** A reusable monthly template. Holds the stable fields so the user only
@@ -30,6 +39,7 @@ export interface SalaryTemplate {
   amounts: SalaryAmounts;
   currency: Currency;
   deductions: SalaryDeductions;
+  contributions: SalaryContributions;
   note: string;
 }
 
@@ -46,6 +56,7 @@ export interface SalaryRecord {
   /** Exchange rate to LKR — required when type === "foreign" */
   exchangeRate?: number;
   deductions: SalaryDeductions;
+  contributions: SalaryContributions;
   note: string;
 }
 
