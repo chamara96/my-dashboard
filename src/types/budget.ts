@@ -18,6 +18,19 @@ export interface BudgetItem {
 }
 
 /**
+ * A general event on a budget item with no money involved
+ * (application collected, application handed over, site visit, and so on).
+ */
+export interface BudgetLog {
+  id: string;
+  budgetItemId: string;
+  title: string;
+  /** "YYYY-MM-DD" */
+  date: string;
+  note: string;
+}
+
+/**
  * A single payment against a budget item
  * (advance, first instalment, legal fees, and so on).
  */

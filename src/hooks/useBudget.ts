@@ -1,15 +1,18 @@
 import { useEffect, useState } from "react";
 import {
   subscribeToBudgetItems,
+  subscribeToBudgetLogs,
   subscribeToBudgetPayments,
 } from "../services/budgetService";
-import { BudgetItem, BudgetPayment } from "../types/budget";
+import { BudgetItem, BudgetLog, BudgetPayment } from "../types/budget";
 
 export function useBudget() {
   const [items, setItems] = useState<BudgetItem[]>([]);
   const [payments, setPayments] = useState<BudgetPayment[]>([]);
+  const [logs, setLogs] = useState<BudgetLog[]>([]);
   const [loadingItems, setLoadingItems] = useState(true);
   const [loadingPayments, setLoadingPayments] = useState(true);
+  const [loadingLogs, setLoadingLogs] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -33,17 +36,29 @@ export function useBudget() {
         setLoadingPayments(false);
       }
     );
+    const unsubLogs = subscribeToBudgetLogs(
+      (list) => {
+        setLogs(list);
+        setLoadingLogs(false);
+      },
+      (msg) => {
+        setError(msg);
+        setLoadingLogs(false);
+      }
+    );
 
     return () => {
       unsubItems();
       unsubPayments();
+      unsubLogs();
     };
   }, []);
 
   return {
     items,
     payments,
-    loading: loadingItems || loadingPayments,
+    logs,
+    loading: loadingItems || loadingPayments || loadingLogs,
     error,
   };
 }
