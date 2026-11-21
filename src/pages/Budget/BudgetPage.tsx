@@ -324,6 +324,7 @@ export default function BudgetPage() {
                     <tr>
                       <th className={`${thCls} w-10`} />
                       <th className={thCls}>Item</th>
+                      <th className={thCls}>Started</th>
                       <th className={thCls}>Status</th>
                       <th className={thCls}>Estimated</th>
                       <th className={thCls}>Paid</th>
@@ -363,6 +364,9 @@ export default function BudgetPage() {
                                   {item.note}
                                 </p>
                               )}
+                            </td>
+                            <td className={`${tdCls} whitespace-nowrap`}>
+                              {item.createdAt || "—"}
                             </td>
                             <td className={tdCls}>
                               <StatusBadge status={item.status} />
@@ -429,7 +433,7 @@ export default function BudgetPage() {
                           </tr>
                           {isOpen && (
                             <tr className="bg-gray-50/60 dark:bg-white/[0.02]">
-                              <td colSpan={8} className="px-4 py-2 sm:pl-14 sm:pr-4">
+                              <td colSpan={9} className="px-4 py-2 sm:pl-14 sm:pr-4">
                                 {itemEntries.length === 0 ? (
                                   <p className="py-2 text-sm text-gray-400 dark:text-gray-500">
                                     No payments or logs yet.

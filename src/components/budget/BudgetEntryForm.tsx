@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Modal } from "../ui/modal";
 import Button from "../ui/button/Button";
+import DateField from "../form/DateField";
 import { BudgetEntry, BudgetItem } from "../../types/budget";
 import { saveBudgetEntry } from "../../services/budgetService";
 
@@ -115,12 +116,7 @@ export default function BudgetEntryForm({ isOpen, onClose, item, editing }: Prop
           </div>
           <div>
             <label className={labelCls}>Date *</label>
-            <input
-              type="date"
-              className={inputCls}
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-            />
+            <DateField className={inputCls} value={date} onChange={setDate} />
           </div>
         </div>
 
