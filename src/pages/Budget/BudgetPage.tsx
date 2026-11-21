@@ -7,23 +7,12 @@ import { useModal } from "../../hooks/useModal";
 import { useBudget } from "../../hooks/useBudget";
 import { ChevronDownIcon } from "../../icons";
 import BudgetItemForm from "../../components/budget/BudgetItemForm";
-import BudgetPaymentForm from "../../components/budget/BudgetPaymentForm";
-import BudgetLogForm from "../../components/budget/BudgetLogForm";
+import BudgetEntryForm from "../../components/budget/BudgetEntryForm";
 import {
+  deleteBudgetEntry,
   deleteBudgetItem,
-  deleteBudgetLog,
-  deleteBudgetPayment,
 } from "../../services/budgetService";
-import {
-  BudgetItem,
-  BudgetLog,
-  BudgetPayment,
-  BudgetStatus,
-} from "../../types/budget";
-
-type TimelineEntry =
-  | { kind: "payment"; id: string; date: string; payment: BudgetPayment }
-  | { kind: "log"; id: string; date: string; log: BudgetLog };
+import { BudgetEntry, BudgetItem, BudgetStatus } from "../../types/budget";
 
 function fmt(n: number) {
   return n.toLocaleString(undefined, {
@@ -62,8 +51,7 @@ const FILTERS: { value: "all" | BudgetStatus; label: string }[] = [
 
 type DeleteTarget =
   | { type: "item"; id: string; name: string }
-  | { type: "payment"; id: string; label: string }
-  | { type: "log"; id: string; label: string };
+  | { type: "entry"; id: string; label: string; isPayment: boolean };
 
 const thCls =
   "px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400";
@@ -158,60 +146,41 @@ function MoneyLines({
 }
 
 export default function BudgetPage() {
-  const { items, payments, logs, loading, error } = useBudget();
+  const { items, entries, loading, error } = useBudget();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [statusFilter, setStatusFilter] = useState<"all" | BudgetStatus>("all");
 
   const itemModal = useModal();
-  const paymentModal = useModal();
-  const logModal = useModal();
+  const entryModal = useModal();
   const [editingItem, setEditingItem] = useState<BudgetItem | null>(null);
-  const [paymentItem, setPaymentItem] = useState<BudgetItem | null>(null);
-  const [editingPayment, setEditingPayment] = useState<BudgetPayment | null>(null);
-  const [logItem, setLogItem] = useState<BudgetItem | null>(null);
-  const [editingLog, setEditingLog] = useState<BudgetLog | null>(null);
+  const [entryItem, setEntryItem] = useState<BudgetItem | null>(null);
+  const [editingEntry, setEditingEntry] = useState<BudgetEntry | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<DeleteTarget | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // Payments and logs merged per item, newest date first.
-  // Same-day entries fall back to Firebase push-id order (newest first).
-  const timelineByItem = useMemo(() => {
-    const map = new Map<string, TimelineEntry[]>();
-    const push = (itemId: string, entry: TimelineEntry) => {
-      const list = map.get(itemId) ?? [];
+  // Entries grouped per item. `entries` already arrives newest date first.
+  const entriesByItem = useMemo(() => {
+    const map = new Map<string, BudgetEntry[]>();
+    for (const entry of entries) {
+      const list = map.get(entry.budgetItemId) ?? [];
       list.push(entry);
-      map.set(itemId, list);
-    };
-    for (const payment of payments) {
-      push(payment.budgetItemId, {
-        kind: "payment",
-        id: payment.id,
-        date: payment.date,
-        payment,
-      });
-    }
-    for (const log of logs) {
-      push(log.budgetItemId, { kind: "log", id: log.id, date: log.date, log });
-    }
-    for (const list of map.values()) {
-      list.sort((a, b) => {
-        if (a.date !== b.date) return a.date < b.date ? 1 : -1;
-        return a.id < b.id ? 1 : a.id > b.id ? -1 : 0;
-      });
+      map.set(entry.budgetItemId, list);
     }
     return map;
-  }, [payments, logs]);
+  }, [entries]);
 
+  // Only entries with an amount (payments) count towards Paid.
   const paidByItem = useMemo(() => {
     const map = new Map<string, number>();
-    for (const payment of payments) {
+    for (const entry of entries) {
+      if (!entry.amount) continue;
       map.set(
-        payment.budgetItemId,
-        (map.get(payment.budgetItemId) ?? 0) + payment.amount
+        entry.budgetItemId,
+        (map.get(entry.budgetItemId) ?? 0) + entry.amount
       );
     }
     return map;
-  }, [payments]);
+  }, [entries]);
 
   const filtered = useMemo(
     () =>
@@ -254,38 +223,21 @@ export default function BudgetPage() {
     itemModal.closeModal();
   };
 
-  const openNewPayment = (item: BudgetItem) => {
-    setPaymentItem(item);
-    setEditingPayment(null);
+  const openNewEntry = (item: BudgetItem) => {
+    setEntryItem(item);
+    setEditingEntry(null);
     setExpanded((prev) => ({ ...prev, [item.id]: true }));
-    paymentModal.openModal();
+    entryModal.openModal();
   };
-  const openEditPayment = (item: BudgetItem, payment: BudgetPayment) => {
-    setPaymentItem(item);
-    setEditingPayment(payment);
-    paymentModal.openModal();
+  const openEditEntry = (item: BudgetItem, entry: BudgetEntry) => {
+    setEntryItem(item);
+    setEditingEntry(entry);
+    entryModal.openModal();
   };
-  const closePayment = () => {
-    setPaymentItem(null);
-    setEditingPayment(null);
-    paymentModal.closeModal();
-  };
-
-  const openNewLog = (item: BudgetItem) => {
-    setLogItem(item);
-    setEditingLog(null);
-    setExpanded((prev) => ({ ...prev, [item.id]: true }));
-    logModal.openModal();
-  };
-  const openEditLog = (item: BudgetItem, log: BudgetLog) => {
-    setLogItem(item);
-    setEditingLog(log);
-    logModal.openModal();
-  };
-  const closeLog = () => {
-    setLogItem(null);
-    setEditingLog(null);
-    logModal.closeModal();
+  const closeEntry = () => {
+    setEntryItem(null);
+    setEditingEntry(null);
+    entryModal.closeModal();
   };
 
   const handleDelete = async () => {
@@ -294,10 +246,8 @@ export default function BudgetPage() {
     try {
       if (confirmDelete.type === "item") {
         await deleteBudgetItem(confirmDelete.id);
-      } else if (confirmDelete.type === "payment") {
-        await deleteBudgetPayment(confirmDelete.id);
       } else {
-        await deleteBudgetLog(confirmDelete.id);
+        await deleteBudgetEntry(confirmDelete.id);
       }
       setConfirmDelete(null);
     } finally {
@@ -384,7 +334,7 @@ export default function BudgetPage() {
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
                     {filtered.map((item) => {
-                      const timeline = timelineByItem.get(item.id) ?? [];
+                      const itemEntries = entriesByItem.get(item.id) ?? [];
                       const paid = paidByItem.get(item.id) ?? 0;
                       const remaining = item.estimatedCost - paid;
                       const isOpen = !!expanded[item.id];
@@ -450,17 +400,10 @@ export default function BudgetPage() {
                             >
                               <button
                                 type="button"
-                                onClick={() => openNewPayment(item)}
+                                onClick={() => openNewEntry(item)}
                                 className={`${actionBtn} mr-1 bg-brand-50 text-brand-600 hover:bg-brand-100 dark:bg-brand-500/10 dark:text-brand-400`}
                               >
-                                + Payment
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => openNewLog(item)}
-                                className={`${actionBtn} mr-1 bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600`}
-                              >
-                                + Log
+                                + Entry
                               </button>
                               <button
                                 type="button"
@@ -487,23 +430,19 @@ export default function BudgetPage() {
                           {isOpen && (
                             <tr className="bg-gray-50/60 dark:bg-white/[0.02]">
                               <td colSpan={8} className="px-4 py-2 sm:pl-14 sm:pr-4">
-                                {timeline.length === 0 ? (
+                                {itemEntries.length === 0 ? (
                                   <p className="py-2 text-sm text-gray-400 dark:text-gray-500">
                                     No payments or logs yet.
                                   </p>
                                 ) : (
                                   <ul>
-                                    {timeline.map((entry) => {
-                                      const isPayment = entry.kind === "payment";
-                                      const title = isPayment
-                                        ? entry.payment.label
-                                        : entry.log.title;
-                                      const note = isPayment
-                                        ? entry.payment.note
-                                        : entry.log.note;
+                                    {itemEntries.map((entry) => {
+                                      const isPayment = !!entry.amount;
+                                      const title = entry.title;
+                                      const note = entry.note;
                                       return (
                                         <li
-                                          key={`${entry.kind}-${entry.id}`}
+                                          key={entry.id}
                                           className="flex items-center gap-3 border-t border-gray-100 py-2 first:border-t-0 dark:border-white/[0.05]"
                                         >
                                           <span className="w-[92px] shrink-0 text-xs text-gray-400">
@@ -520,16 +459,14 @@ export default function BudgetPage() {
                                           </span>
                                           <span className="w-[130px] shrink-0 text-right text-sm font-medium tabular-nums text-gray-800 dark:text-white/90">
                                             {isPayment
-                                              ? fmtC(entry.payment.amount, item.currency)
+                                              ? fmtC(entry.amount as number, item.currency)
                                               : ""}
                                           </span>
                                           <span className="shrink-0 whitespace-nowrap">
                                             <button
                                               type="button"
                                               onClick={() =>
-                                                isPayment
-                                                  ? openEditPayment(item, entry.payment)
-                                                  : openEditLog(item, entry.log)
+                                                openEditEntry(item, entry)
                                               }
                                               className={editBtnCls}
                                             >
@@ -539,9 +476,10 @@ export default function BudgetPage() {
                                               type="button"
                                               onClick={() =>
                                                 setConfirmDelete({
-                                                  type: isPayment ? "payment" : "log",
+                                                  type: "entry",
                                                   id: entry.id,
                                                   label: title,
+                                                  isPayment,
                                                 })
                                               }
                                               className={deleteBtnCls}
@@ -573,17 +511,11 @@ export default function BudgetPage() {
         onClose={closeItem}
         editing={editingItem}
       />
-      <BudgetPaymentForm
-        isOpen={paymentModal.isOpen}
-        onClose={closePayment}
-        item={paymentItem}
-        editing={editingPayment}
-      />
-      <BudgetLogForm
-        isOpen={logModal.isOpen}
-        onClose={closeLog}
-        item={logItem}
-        editing={editingLog}
+      <BudgetEntryForm
+        isOpen={entryModal.isOpen}
+        onClose={closeEntry}
+        item={entryItem}
+        editing={editingEntry}
       />
 
       <Modal
@@ -597,7 +529,7 @@ export default function BudgetPage() {
         <p className="mb-5 text-sm text-gray-500 dark:text-gray-400">
           {confirmDelete?.type === "item"
             ? `Delete “${confirmDelete.name}” and every payment and log recorded under it? This cannot be undone.`
-            : `Delete the ${confirmDelete?.type === "log" ? "log" : "payment"} “${confirmDelete?.label}”? This cannot be undone.`}
+            : `Delete the ${confirmDelete?.isPayment ? "payment" : "log"} “${confirmDelete?.label}”? This cannot be undone.`}
         </p>
         <div className="flex justify-end gap-3">
           <Button type="button" variant="outline" onClick={() => setConfirmDelete(null)}>

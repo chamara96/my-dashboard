@@ -1,18 +1,15 @@
 import { useEffect, useState } from "react";
 import {
+  subscribeToBudgetEntries,
   subscribeToBudgetItems,
-  subscribeToBudgetLogs,
-  subscribeToBudgetPayments,
 } from "../services/budgetService";
-import { BudgetItem, BudgetLog, BudgetPayment } from "../types/budget";
+import { BudgetEntry, BudgetItem } from "../types/budget";
 
 export function useBudget() {
   const [items, setItems] = useState<BudgetItem[]>([]);
-  const [payments, setPayments] = useState<BudgetPayment[]>([]);
-  const [logs, setLogs] = useState<BudgetLog[]>([]);
+  const [entries, setEntries] = useState<BudgetEntry[]>([]);
   const [loadingItems, setLoadingItems] = useState(true);
-  const [loadingPayments, setLoadingPayments] = useState(true);
-  const [loadingLogs, setLoadingLogs] = useState(true);
+  const [loadingEntries, setLoadingEntries] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -26,39 +23,27 @@ export function useBudget() {
         setLoadingItems(false);
       }
     );
-    const unsubPayments = subscribeToBudgetPayments(
+    const unsubEntries = subscribeToBudgetEntries(
       (list) => {
-        setPayments(list);
-        setLoadingPayments(false);
+        setEntries(list);
+        setLoadingEntries(false);
       },
       (msg) => {
         setError(msg);
-        setLoadingPayments(false);
-      }
-    );
-    const unsubLogs = subscribeToBudgetLogs(
-      (list) => {
-        setLogs(list);
-        setLoadingLogs(false);
-      },
-      (msg) => {
-        setError(msg);
-        setLoadingLogs(false);
+        setLoadingEntries(false);
       }
     );
 
     return () => {
       unsubItems();
-      unsubPayments();
-      unsubLogs();
+      unsubEntries();
     };
   }, []);
 
   return {
     items,
-    payments,
-    logs,
-    loading: loadingItems || loadingPayments || loadingLogs,
+    entries,
+    loading: loadingItems || loadingEntries,
     error,
   };
 }

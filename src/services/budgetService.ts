@@ -1,10 +1,9 @@
 import { get, onValue, push, ref, remove, set, update } from "firebase/database";
 import { db } from "../lib/firebase";
-import { BudgetItem, BudgetLog, BudgetPayment } from "../types/budget";
+import { BudgetEntry, BudgetItem } from "../types/budget";
 
 const ITEMS_PATH = "budgetItems";
-const PAYMENTS_PATH = "budgetPayments";
-const LOGS_PATH = "budgetLogs";
+const ENTRIES_PATH = "budgetEntries";
 
 function toList<T extends { id: string }>(
   data: Record<string, Omit<T, "id">> | null
@@ -34,29 +33,20 @@ export function subscribeToBudgetItems(
   );
 }
 
-export function subscribeToBudgetPayments(
-  onData: (items: BudgetPayment[]) => void,
+export function subscribeToBudgetEntries(
+  onData: (entries: BudgetEntry[]) => void,
   onError: (message: string) => void
 ): () => void {
   return onValue(
-    ref(db, PAYMENTS_PATH),
+    ref(db, ENTRIES_PATH),
     (snapshot) => {
-      const list = toList<BudgetPayment>(snapshot.val());
-      list.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+      const list = toList<BudgetEntry>(snapshot.val());
+      // Date descending; same-day entries fall back to push-id order (newest first)
+      list.sort((a, b) => {
+        if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+        return a.id < b.id ? 1 : a.id > b.id ? -1 : 0;
+      });
       onData(list);
-    },
-    (err) => onError(err.message)
-  );
-}
-
-export function subscribeToBudgetLogs(
-  onData: (items: BudgetLog[]) => void,
-  onError: (message: string) => void
-): () => void {
-  return onValue(
-    ref(db, LOGS_PATH),
-    (snapshot) => {
-      onData(toList<BudgetLog>(snapshot.val()));
     },
     (err) => onError(err.message)
   );
@@ -75,59 +65,49 @@ export async function updateBudgetItem(
   await set(ref(db, `${ITEMS_PATH}/${id}`), item);
 }
 
-/** Removes the item and every payment and log recorded against it. */
+/** Removes the item and every entry recorded against it. */
 export async function deleteBudgetItem(id: string): Promise<void> {
-  const [paymentsSnap, logsSnap] = await Promise.all([
-    get(ref(db, PAYMENTS_PATH)),
-    get(ref(db, LOGS_PATH)),
-  ]);
+  const snapshot = await get(ref(db, ENTRIES_PATH));
+  const data = snapshot.val() as Record<string, Omit<BudgetEntry, "id">> | null;
   const updates: Record<string, null> = {
     [`${ITEMS_PATH}/${id}`]: null,
   };
-  const collect = (
-    path: string,
-    data: Record<string, { budgetItemId: string }> | null
-  ) => {
-    if (!data) return;
-    for (const [childId, value] of Object.entries(data)) {
+  if (data) {
+    for (const [entryId, value] of Object.entries(data)) {
       if (value.budgetItemId === id) {
-        updates[`${path}/${childId}`] = null;
+        updates[`${ENTRIES_PATH}/${entryId}`] = null;
       }
     }
-  };
-  collect(PAYMENTS_PATH, paymentsSnap.val());
-  collect(LOGS_PATH, logsSnap.val());
+  }
   await update(ref(db), updates);
 }
 
-export async function addBudgetLog(log: Omit<BudgetLog, "id">): Promise<void> {
-  await set(push(ref(db, LOGS_PATH)), log);
+export interface BudgetEntryInput {
+  budgetItemId: string;
+  title: string;
+  date: string;
+  note: string;
+  /** Greater than 0 → a payment. null → a general log. */
+  amount: number | null;
 }
 
-export async function updateBudgetLog(
-  id: string,
-  log: Omit<BudgetLog, "id">
+/** Creates a new entry, or overwrites an existing one when `id` is given. */
+export async function saveBudgetEntry(
+  input: BudgetEntryInput,
+  id?: string | null
 ): Promise<void> {
-  await set(ref(db, `${LOGS_PATH}/${id}`), log);
+  const entryRef = id ? ref(db, `${ENTRIES_PATH}/${id}`) : push(ref(db, ENTRIES_PATH));
+  // Realtime Database rejects undefined, so `amount` is left out for logs.
+  const payload: Omit<BudgetEntry, "id"> = {
+    budgetItemId: input.budgetItemId,
+    title: input.title,
+    date: input.date,
+    note: input.note,
+    ...(input.amount !== null && input.amount > 0 ? { amount: input.amount } : {}),
+  };
+  await set(entryRef, payload);
 }
 
-export async function deleteBudgetLog(id: string): Promise<void> {
-  await remove(ref(db, `${LOGS_PATH}/${id}`));
-}
-
-export async function addBudgetPayment(
-  payment: Omit<BudgetPayment, "id">
-): Promise<void> {
-  await set(push(ref(db, PAYMENTS_PATH)), payment);
-}
-
-export async function updateBudgetPayment(
-  id: string,
-  payment: Omit<BudgetPayment, "id">
-): Promise<void> {
-  await set(ref(db, `${PAYMENTS_PATH}/${id}`), payment);
-}
-
-export async function deleteBudgetPayment(id: string): Promise<void> {
-  await remove(ref(db, `${PAYMENTS_PATH}/${id}`));
+export async function deleteBudgetEntry(id: string): Promise<void> {
+  await remove(ref(db, `${ENTRIES_PATH}/${id}`));
 }
